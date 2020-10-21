@@ -1,0 +1,448 @@
+---
+title: "STAT805 Portfolio"
+author: "Yi Yang (17999965)"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{setspace}
+- \onehalfspacing
+- \usepackage{hyperref}
+- \usepackage{float}
+- \usepackage{caption}
+- \hypersetup{ colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+# set up reporting environment
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+
+# import library
+library(dplyr)
+library(lubridate)
+library(readxl)
+library(ggplot2)
+library(readr)
+library(kableExtra)
+theme_set(theme_classic())
+```
+
+# Introduction
+
+I have been collecting receipts after refilling petrol of my car in the past few years. Normally, I gave them out to friends because they could claim those receipts as business expenditures. Figure \ref{fig:example} is an example of how a petrol receipt looks like. As demonstrated, the receipt has a lot useful information, such as date, time, petrol price (by liter), total refilled liters, to name just a few.       
+
+In this portfolio analysis, I would like to conduct some data visualization and statistical analysis to understand my petrol consumption behaviour. I think it will be fun to use data revealing consumption patterns.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=15cm]{receipt_example.png}
+\caption{Petrol receipt example}
+\label{fig:example}
+\end{figure}
+
+## Data set briefing
+
+```{r}
+# import dataset from excel file
+df <- read_xlsx("portfolio.xlsx", sheet = "Sheet1")
+start_date <- as.character(min(df$refill_date))
+end_date <- max(df$refill_date)
+# str(df)
+# head(df)
+# cat(colnames(df),sep = "\n")
+
+# data transformation
+# derive new columns
+# refill_weekday, refill_month
+df <- df %>%
+  # change characters to upper case
+  mutate(am_pm  = case_when(
+    am(refill_time) == 1 ~ 'AM',
+    TRUE ~ 'PM'
+  )) %>%
+  mutate(
+    gas_station_address = toupper(gas_station_address),
+    gas_station_suburb = toupper(gas_station_suburb),
+    gas_station_city = toupper(gas_station_city),
+    gas_station_company = toupper(gas_station_company),
+    refill_time = format(refill_time, format ="%H:%M:%S")
+  ) %>%
+  mutate(refill_weekday = wday(refill_date, label = TRUE, abbr = TRUE, week_start = 1),
+         # refill_month = toupper(months.Date(refill_date, abbreviate = TRUE)),
+         refill_date = as.Date(refill_date),
+         big_discount = if_else(refill_discount_per_liter > 0.06,1,0))
+
+# df %>%
+#   write_delim("portfolio_trans.csv", delim = "|")
+```
+
+The original data set I collected was recorded in an [excel spreadsheet](https://github.com/mickeyang/datasets/blob/main/portfolio.xlsx
+). It consists of 40 records (starting from `r start_date` to `r end_date`) and 12 columns. To facilitate my analysis, I have derived two new variables based on the original, including am_pm, refill_weekday. A data dictionary is provided in table \ref{tab:dict} to detail all the 14 variables. 
+
+\begin{table}[H]
+\captionsetup{font=scriptsize}
+\centering
+\begin{tabular}{lp{10cm}}
+Variable Name & Variable Description \\ \hline
+refill\_date & petrol fill date \\ \hline
+refill\_time & petrol fill time of the day \\ \hline
+gas\_price & petrol unit price per liter \\ \hline
+gas\_refill\_liter & petrol refill total amount in liters \\ \hline
+refill\_discount\_per\_liter & petrol refill discount per liter \\ \hline
+discount\_amount & total discount amount \\ \hline
+tax\_amount & total tax paid \\ \hline
+total\_amount\_paid & total refill amount (GST inclusive) \\ \hline
+gas\_station\_address & detailed address of the petrol station \\ \hline
+gas\_station\_suburb & suburb of the petrol station \\ \hline
+gas\_station\_city & city of the petrol station \\ \hline
+gas\_station\_company & company of the petrol station \\ \hline
+am\_pm & if the refill happened before 12:00 pm, then coded it as AM, otherwise PM \\ \hline
+refill\_weekday & which weekday the refill happened, from Mon to Sun  \\ \hline
+\end{tabular}
+\caption{Data dictionary}
+\label{tab:dict}
+\end{table}
+
+The below table showcases a few observations and columns of data used for this portfolio analysis.
+
+```{r}
+top20 <- df %>%
+  select(refill_date, 
+         refill_time, 
+         gas_price, 
+         gas_station_suburb, 
+         gas_station_city, 
+         gas_station_company, 
+         am_pm, 
+         refill_weekday) %>%
+  top_n(20)
+```
+
+
+```{r}
+top20 %>%
+  knitr::kable(caption = "First few observations of the collected data set. Please note: due to space limitation, I only showcase columns relevant to the portfolio analysis. The full data set can be accessible via the link (https://github.com/mickeyang/datasets/blob/main/portfolio.xlsx
+).") %>%
+  kable_styling(font_size = 9) %>%
+  # column_spec(column = 4:5, width = "3.5cm") %>%
+  landscape()
+```
+
+```{r}
+# time series
+df %>%
+  ggplot(aes(refill_date, gas_price)) +
+  geom_line() +
+  geom_point() +
+  # geom_hline(yintercept = max(df$gas_price), linetype = "dashed") +
+  # geom_hline(yintercept = min(df$gas_price), linetype = "dashed") +
+  geom_vline(xintercept = as.Date("2020-03-24"), colour = "red") +
+  geom_text(aes(x = as.Date("2020-03-24"), y = 2.0, angle = 90, label = "lockdown started", colour = "red"), check_overlap = TRUE, vjust = -0.4, show.legend = FALSE) +
+  scale_x_date(date_breaks = "month", date_labels = "%b-%y") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.title = element_blank()) +
+  labs(title = "Gas price trend from Dec 2018")
+```
+
+The above chart illustrated all the 40 refills and the gas price change from December 2018 to October 2020. Due to the Covid 19 travel restrictions, people was advised to stay at home from 24/03/2020. As a result, I did not have much time driving my car, hence there were not many refill records in the year 2020 (as you can see from the below statistics).
+
+```{r echo=TRUE}
+table(year(df$refill_date))
+```
+
+In the following, I would like to conduct some statistical analysis to answer some interesting questions I cared about.     
+    1) Comparing with the nation, was the petrol price cheaper in Palmerston North as a popular transportation center?     
+    2) Did I have different petrol refill habit when living in Auckland and Palmerston North?      
+    3) Did I have any preferred day during the week to refill petrol?      
+    4) Did my refill records follow a Possion distribution when living in Palmerston North?    
+    5) Did the big petrol discount usually happen on a particular weekday?    
+    6) It was anecdotal that the international crude oil price would impact petrol price. Was it true based on my observations?
+
+# Statistical Analysis
+
+## Q1. Was petrol price cheaper in Palmerston North.
+
+According to the [Ministry of Transport](https://www.transport.govt.nz/land/regional-fuel-tax/), it notes "A regional fuel tax applies from 1 July 2018 until 30 June 2028 within the Auckland region (excluding the Great Barrier Local Board area). The regional fuel tax in Auckland is 10 cents per litre on petrol and diesel". Basically, the new policy mean that Aucklanders have to pay more on petrol.     
+
+From early 2019 to early 2020, I relocated to Palmerston North from Auckland. I was excited that I had the chance to escape the additional tax imposed to Aucklanders and reduce my transportation cost. People told me that petrol price in Palmerston North was cheaper than most other places because it's a transportation center located in the middle of the North Island. But was that really the case? Based on my historical petrol refill records, Let's find out.   
+
+In this analysis, I am assuming that petrol price across different cities in New Zealand follows a Gaussian distribution. To get the national mean, I have downloaded the weekly petrol price snapshots from [AA Petrolwatch](https://www.aa.co.nz/cars/motoring-blog/SearchBlog/?categoryID=9) and keep them in one file which can be accessed through the [link](https://github.com/mickeyang/datasets/blob/main/national_petrol_price.xlsx).       
+
+Prior to the analysis, here is my NULL and ALTERNATIVE hypothesis.    
+
+**$H_0$: petrol price in Palmerston North is NOT lower than that of the national average price**     
+$H_a$: petrol price in Palmerston North is lower than that of the national average price
+
+```{r}
+# weekly price is sourced from the AA websites
+arrive_palmy_date <- min(df$refill_date[df$gas_station_city == "PALMERSTON NORTH"])
+leave_palmy_date <- max(df$refill_date[df$gas_station_city == "PALMERSTON NORTH"])
+
+weekly_price <- read_xlsx("national_petrol_price.xlsx", col_types = c("date", "numeric"))
+weekly_price <- weekly_price %>%
+  # scale price up, the original data was based on cents
+  mutate(price_trans = petrol_avg_price_nz / 100)
+
+palmy_price <- df$gas_price[df$gas_station_city == "PALMERSTON NORTH"]
+national_price <- weekly_price$price_trans[weekly_price$date >= as.Date(arrive_palmy_date) & weekly_price$date <= as.Date(leave_palmy_date)]
+```
+
+After some data transformation and manipulation, I got the below two data sets.
+
+```{r echo=TRUE}
+palmy_price
+mean(palmy_price)
+
+national_price
+mean(national_price)
+```
+
+###  Two-sample hypothesis testing
+```{r echo=TRUE}
+result <- t.test(palmy_price, national_price, alternative = "less")
+result
+```
+
+According to the above analysis outcome, I can see from the extremely small P-value (`r result$p.value`) that I may reject the null hypothesis, and infer that the petrol price in Palmerston North was indeed lower than that of the national average. Emmm, in that case, I may consider moving back to Palmerston North again after Master's study.
+
+## Q.2 Petrol refill habit when living in Auckland and Palmerston North
+
+```{r}
+table(df$gas_station_city)
+```
+
+```{r}
+barplot(table(df$gas_station_city), cex.names = 0.8)
+```
+
+In line with the above chart, I can tell that the majority of the petrol refills happened in Auckland and Palmerston North where I worked and lived for most of the time. Out of those overall 40 refills, three of them were in Patea and Turangi where I travelled bypass. I imagined that most refills would have been in early morning because I am a morning person. But the collected dataset disapproved my assumption (see below table \ref{tab:ampm}). 
+
+\begin{table}[H]
+\captionsetup{font=scriptsize}
+\centering
+\begin{tabular}{ll}
+AM & PM   \\ \hline
+19 & 21   \\ \hline
+\end{tabular}
+\caption{Counts of petrol refill in the AM and PM. Note that a refill after 12:00 pm is coded as PM, otherwise AM.}
+\label{tab:ampm}
+\end{table}
+
+Because I mainly lived in Palmerston North and Auckland, I would like to exclude those three travelling refills of Patea and Turangi, and conduct a statistical analysis to see if my petrol refill habit differed in those two cities.
+
+```{r}
+city <- df %>%
+  filter(gas_station_city %in% c("AUCKLAND", "PALMERSTON NORTH")) %>%
+  group_by(gas_station_city, am_pm) %>%
+  count()
+# city
+```
+
+```{r}
+M <- matrix(c(7,14,3,13), 2,2,byrow = TRUE)
+dimnames(M) <- list(time = c("PM", "AM"), city = c("Auckland", "Palmerston"))
+```
+
+\begin{table}[H]
+\captionsetup{font=scriptsize}
+\centering
+\begin{tabular}{l|r|r}
+time & Auckland & Palmerston North \\ \hline
+PM  & 7 & 14 \\ \hline
+AM  & 3 & 13 \\ \hline
+\end{tabular}
+\caption{contingency table}
+\label{tab:contingency}
+\end{table}
+
+### Statistical analysis
+
+Based on the contingency table \ref{tab:contingency}, **my NULL hypothesis is $H_0$: Refill in the morning or afternoon is independent of city**, that is $Prob(Auckland|PM) = Prob(Palmerston \;North|PM)$.
+
+```{r echo=TRUE}
+# hypergeometric distribution
+dhyper(7,21,16,10)
+sum(dhyper(7:21,21,16,10))
+```
+
+```{r echo=TRUE}
+f <- fisher.test(M, alternative = "greater")
+f
+```
+
+According to the above analysis (hypergeometric distribution and Fisher's Exact Test), the P-value is `r f$p.value` which is greater than 0.05. Therefore, it failed to reject the $H_0$ and I may conclude that there is no statistical evidence saying that my petrol refilling habit differed when living in Auckland and Palmerston North.
+
+## Q3. Do I have any preferred weekday to refill petrol? 
+
+In this analysis, **the $H_0$ is: there was no preferred weekday for refilling petrol**.
+
+```{r echo=TRUE}
+barplot(table(df$refill_weekday),
+        main = "Petrol refill distribution of weekdays")
+# observation
+table(df$refill_weekday)
+o <- table(df$refill_weekday)
+
+# expectation
+e <- rep(nrow(df)/7,7)
+e
+
+# badness of fit
+B <- sum((o-e)^2/e)
+
+# Chi-square test
+chiResult <- pchisq(B, df = 6, lower.tail = FALSE)
+chiResult
+```
+
+According to the above chi-square analysis, its P-value `r chiResult` is less than 0.05. Therefore, I may reject the $H_0$ and conclude that I had a preferred weekday for petrol refilling given the observations.
+
+## Q4. Did my refill records of each suburb follow a Poisson distribution?
+
+```{r}
+table(df$gas_station_suburb[df$gas_station_city == "PALMERSTON NORTH"])
+```
+
+According to the above summary, I have refilled petrol in five different suburbs while living in Palmerston North. The above statistics depict that I refilled my car once in Hokowhitu and West End, five times in Awapuni, six times in Roslyn, and 14 times in Takaro. I would like to check if those refills followed a Possison distribution or not.   
+
+**The NULL hypothesis of this question is $H_0$: the refill data did not follow a Poisson distribution.**
+
+```{r}
+tbl_suburb <- df %>%
+  filter(gas_station_city == "PALMERSTON NORTH") %>%
+  select(gas_station_suburb) %>%
+  group_by(gas_station_suburb) %>%
+  count()
+```
+
+```{r}
+barplot(tbl_suburb$n, cex.names = 0.7, names = tbl_suburb$gas_station_suburb)
+```
+
+### Statistical analysis
+
+
+```{r echo=TRUE}
+o <- tbl_suburb$n
+o
+
+e <- replicate(5, mean(o))
+e
+
+B <- sum((o-e)^2/e)
+p <- pchisq(B, 4, lower.tail = FALSE)
+
+p
+```
+
+```{r}
+# replicate(5, rpois(5, lambda = mean(o)))
+# qqplot(o, rpois(5, lambda = mean(o)))
+# abline(0,1)
+```
+After conducting the above statistical analysis, according to the extremely small P-value (`r p`), I reject the NULL hypothesis and conclude that the observations are consistent with a Poisson distribution.
+
+
+## Q.5 Did the big petrol discount happen on a particular weekday?
+
+Normally, to promote sales, petrol stations apply six cents discount to each petrol liter. Moreover, there were some occasions the promotion discount going up to 10 cents. Did the big promotion (greater than six cents) usually happen on particular days of each week? I would like to find out the answer in the below analysis.
+
+```{r}
+# table(df$big_discount)
+barplot(table(df$refill_weekday[df$big_discount == 1]),
+        main = "Big discount (> 6 cents) by weekday")
+```
+
+```{r}
+# table(df$refill_weekday[df$big_discount == 0])
+# table(df$refill_weekday[df$big_discount == 1])
+
+discount <- data.frame(small_discount = c(table(df$refill_weekday[df$big_discount == 0])),
+           big_discount = c(table(df$refill_weekday[df$big_discount == 1])))
+```
+
+\begin{table}[H]
+\captionsetup{font=scriptsize}
+\centering
+\begin{tabular}{lcc}
+& Small discount & Big discount  \\ \hline
+MON & 4 & 0   \\ \hline
+TUE & 2 & 0   \\ \hline
+WED & 6 & 8   \\ \hline
+THU & 1 & 1   \\ \hline
+FRI & 1 & 1   \\ \hline
+SAT & 6 & 1   \\ \hline
+SUN & 8 & 1   \\ \hline
+\end{tabular}
+\caption{Big discount means discount which was greater than six cents.}
+\label{tab:discount}
+\end{table}
+
+### Statistical analysis
+
+$H_0$: the petrol discount difference has nothing to do with the weekday. This means $Prob(small\_discount|weekday) = Prob(big\_discount|weekday)$.
+
+```{r echo=TRUE}
+d <- matrix(c(4,0,2,0,6,8,1,1,1,1,6,1,8,1), nrow = 7, ncol = 2, byrow = TRUE)
+r <- fisher.test(d)
+r
+```
+
+```{r echo=TRUE}
+#chi square test
+chisq.test(d)
+```
+
+According to the above analysis (Fisher's Exact Test and Chi-square Test), both of their P-value are greater than 0.05. Therefore, they both failed to reject the $H_0$ and I may conclude that there is no statistical evidence showing that big petrol discount concerned a particular weekday.
+
+## Q6. Crude oil price impacted retail petrol price? 
+
+It was anecdotal that the international crude oil price would impact the petrol retail price. I would like to find out if the anecdote was true or not based on my observations. In order to compare the retail price with the crude oil price, I have sourced the historical crude oil data from **[www.macrotrends.net](https://www.macrotrends.net/1369/crude-oil-price-history-chart)**. The crude oil price data set (which is accessible via the [link](https://github.com/mickeyang/datasets/blob/main/crude_oil.csv
+)) does not have records of weekends and public holidays. Therefore, after merging the two data sets, I had 21 observations left for further analysis.
+
+```{r}
+# import crude oil price usd dollar per barrel
+crude <- read_csv("crude_oil.csv",col_types = c("Dd"))
+crude_trans <- df %>%
+  inner_join(crude, by = c("refill_date" = "date"))
+```
+
+### Scatter Graph of Retail
+
+```{r}
+par(las = 1)
+plot(crude_trans$gas_price ~ crude_trans$value, xlab = "Crude oil price", ylab = "Petrol retail price")
+# abline(lm(gas_price ~ value,data = crude_trans))
+```
+
+### Linear regression
+
+```{r}
+lm(gas_price ~ value,data = crude_trans)
+s <- summary(lm(gas_price ~ value,data = crude_trans))
+s
+s$adj.r.squared
+s$coefficients[2,4]
+```
+
+Based on the linear regression summary, I can see that the intercept of the model is `r s$coefficients[1]` and slope is `r s$coefficients[2]`. By looking at the P-value (`r s$coefficients[2,4]`) and the adjusted R-squared (`r s$adj.r.squared`) of the model, I can conclude that the correlation between the crude oil price and petrol retail price was not significant. Moreover, the model cannot be reliably used to predict retail price based on crude oil price.     
+
+
+As stated by the energy company [Z](https://z.co.nz/motorists/fuel-pricing/), its petrol retail price was determined by a few factors, such as the international barrel price, refined fuel prices in Asia and currency exchange rate. Additionally, according to [AA](https://www.aa.co.nz/cars/owning-a-car/fuel-prices-and-types/fuel-prices/), the two main reasons impacting petrol prices are world demand and supply, and investment speculation. Those two factors can be considered for future analysis if data is accessible.
+
+# Summary
+
+In this portfolio analysis, I have used [data](https://github.com/mickeyang/datasets/blob/main/portfolio.xlsx
+) collected from petrol refill receipts during the period from `r start_date` to `r end_date`. Those records were mainly generated in Palmerston North the Auckland where I lived and worked. I have also included two external datasets ([national petrol price](https://github.com/mickeyang/datasets/blob/main/national_petrol_price.xlsx
+) and [crude oil price](https://github.com/mickeyang/datasets/blob/main/crude_oil.csv
+)).    
+
+During the analysis, I tried to understand my petrol consumption behaviour. I have found that Palmerston North had cheaper petrol price when comparing with the national average based on my observations. Moreover, my consumption behaviour was consistent in different cities. Based on my observations, I indeed had preferred weekday to go to petrol station, and there was no statistically significant evidence showing that big petrol promotions (greater than 6 cents) happened on a particular weekday.
+
+In the end, I carried out a linear regression analysis based on the New Zealand retail petrol price and the international crude oil. My finding was that there was no statistically significant correlation between those two prices. The petrol retail price change was not directly impacted by that of the crude oil.
+
+
+# END OF THE PORTFOLIO ANALYSIS
+
+Please kindly note that this PDF report was compiled in RMarkdown. The original RMD file can be found [here]().
