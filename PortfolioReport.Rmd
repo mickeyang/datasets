@@ -32,7 +32,7 @@ theme_set(theme_classic())
 
 I have been collecting receipts after refilling petrol of my car in the past few years. Normally, I gave them out to friends because they could claim those receipts as business expenditures. Figure \ref{fig:example} is an example of how a petrol receipt looks like. As demonstrated, the receipt has a lot useful information, such as date, time, petrol price (by liter), total refilled liters, to name just a few.       
 
-In this portfolio analysis, I would like to conduct some data visualization and statistical analysis to understand my petrol consumption behaviour. I think it will be fun to use data revealing consumption patterns.
+In this portfolio analysis, I would like to conduct some data visualization and statistical analysis to understand my petrol consumption behaviour. I think it will be fun to use data revealing consumption patterns. It is worth noting that all the below statistical analysis will use $\alpha = 0.05$ as the cutoff for testing significance. That means, if the P-value is less than 0.05, I will reject the Null hypothesis.
 
 \begin{figure}[H]
 \centering
@@ -145,13 +145,13 @@ df %>%
   labs(title = "Gas price trend from Dec 2018")
 ```
 
-The above chart illustrated all the 40 refills and the gas price change from December 2018 to October 2020. Due to the Covid 19 travel restrictions, people was advised to stay at home from 24/03/2020. As a result, I did not have much time driving my car, hence there were not many refill records in the year 2020 (as you can see from the below statistics).
+The above chart illustrated all the 40 refills and the gas price change from December 2018 to October 2020. Due to the Covid 19 travel restrictions, people were advised to stay at home from 24/03/2020. As a result, I did not have much time driving my car, hence there were not many refill records in the year 2020 (as you can see from the below statistics).
 
 ```{r echo=TRUE}
 table(year(df$refill_date))
 ```
 
-In the following, I would like to conduct some statistical analysis to answer some interesting questions I cared about.     
+In the following, I would like to conduct statistical analysis to answer some interesting questions I cared about.     
     1) Comparing with the nation, was the petrol price cheaper in Palmerston North as a popular transportation center?     
     2) Did I have different petrol refill habit when living in Auckland and Palmerston North?      
     3) Did I have any preferred day during the week to refill petrol?      
@@ -191,9 +191,11 @@ national_price <- weekly_price$price_trans[weekly_price$date >= as.Date(arrive_p
 After some data transformation and manipulation, I got the below two data sets.
 
 ```{r echo=TRUE}
+# all petrol price of Palmerston North
 palmy_price
 mean(palmy_price)
 
+# all average petrol price of the whole nation within of same period of time
 national_price
 mean(national_price)
 ```
@@ -248,22 +250,25 @@ dimnames(M) <- list(time = c("PM", "AM"), city = c("Auckland", "Palmerston"))
 \captionsetup{font=scriptsize}
 \centering
 \begin{tabular}{l|r|r}
-time & Auckland & Palmerston North \\ \hline
-PM  & 7 & 14 \\ \hline
-AM  & 3 & 13 \\ \hline
+ & PM & AM \\ \hline
+Auckland  & 7 & 3 \\ \hline
+Palmerston North   & 14 & 13 \\ \hline
 \end{tabular}
-\caption{contingency table}
+\caption{Contingency table. All AM and PM refill counts of Auckland and Palmerston North.}
 \label{tab:contingency}
 \end{table}
 
 ### Statistical analysis
 
-Based on the contingency table \ref{tab:contingency}, **my NULL hypothesis is $H_0$: Refill in the morning or afternoon is independent of city**, that is $Prob(Auckland|PM) = Prob(Palmerston \;North|PM)$.
+Based on the contingency table \ref{tab:contingency}, **my NULL hypothesis is $H_0$: Refill in the morning or afternoon is independent of city**, that is $Prob(PM|Auckland) = Prob(PM|Palmerston \;North)$.
 
 ```{r echo=TRUE}
 # hypergeometric distribution
-dhyper(7,21,16,10)
-sum(dhyper(7:21,21,16,10))
+# 7 - all PM refills in Auckland
+# 10 - all refills in Auckland (PM + AM)
+# 27 - all refills in Palmerston North (PM + AM)
+# 21 - all PM refills in both Palmerston North + Auckland
+sum(dhyper(7:10,10,27,21))
 ```
 
 ```{r echo=TRUE}
@@ -271,20 +276,25 @@ f <- fisher.test(M, alternative = "greater")
 f
 ```
 
-According to the above analysis (hypergeometric distribution and Fisher's Exact Test), the P-value is `r f$p.value` which is greater than 0.05. Therefore, it failed to reject the $H_0$ and I may conclude that there is no statistical evidence saying that my petrol refilling habit differed when living in Auckland and Palmerston North.
+According to the above analysis (hypergeometric distribution and Fisher's Exact Test), the P-value is `r f$p.value` which is greater than 0.05. Therefore, it failed to reject the $H_0$ and I may conclude that there is no statistically significant evidence saying that my petrol refilling habit differed when living in Auckland and Palmerston North.
 
 ## Q3. Do I have any preferred weekday to refill petrol? 
 
 In this analysis, **the $H_0$ is: there was no preferred weekday for refilling petrol**.
 
-```{r echo=TRUE}
+```{r}
 barplot(table(df$refill_weekday),
         main = "Petrol refill distribution of weekdays")
+```
+
+
+```{r echo=TRUE}
 # observation
 table(df$refill_weekday)
 o <- table(df$refill_weekday)
 
 # expectation
+# all weekdays (7 days) have equal chances of refilling petrol
 e <- rep(nrow(df)/7,7)
 e
 
@@ -324,15 +334,16 @@ barplot(tbl_suburb$n, cex.names = 0.7, names = tbl_suburb$gas_station_suburb)
 
 
 ```{r echo=TRUE}
+# observations
 o <- tbl_suburb$n
 o
 
+# expectations, use the mean of the observations
 e <- replicate(5, mean(o))
 e
 
 B <- sum((o-e)^2/e)
 p <- pchisq(B, 4, lower.tail = FALSE)
-
 p
 ```
 
@@ -381,7 +392,7 @@ SUN & 8 & 1   \\ \hline
 
 ### Statistical analysis
 
-$H_0$: the petrol discount difference has nothing to do with the weekday. This means $Prob(small\_discount|weekday) = Prob(big\_discount|weekday)$.
+**$H_0$: the petrol discount difference has nothing to do with the weekday**. This means $Prob(small\_discount|weekday) = Prob(big\_discount|weekday)$.
 
 ```{r echo=TRUE}
 d <- matrix(c(4,0,2,0,6,8,1,1,1,1,6,1,8,1), nrow = 7, ncol = 2, byrow = TRUE)
@@ -394,7 +405,7 @@ r
 chisq.test(d)
 ```
 
-According to the above analysis (Fisher's Exact Test and Chi-square Test), both of their P-value are greater than 0.05. Therefore, they both failed to reject the $H_0$ and I may conclude that there is no statistical evidence showing that big petrol discount concerned a particular weekday.
+According to the above analysis (Fisher's Exact Test and Chi-square Test), both of their P-value are greater than 0.05. Therefore, they both failed to reject the $H_0$ and I may conclude that there is no statistically significant evidence showing that big petrol discount concerned a particular weekday.
 
 ## Q6. Crude oil price impacted retail petrol price? 
 
@@ -408,12 +419,12 @@ crude_trans <- df %>%
   inner_join(crude, by = c("refill_date" = "date"))
 ```
 
-### Scatter Graph of Retail
+### Scatter Graph of Petrol Retail Price and International Crude Oil Price
 
 ```{r}
 par(las = 1)
 plot(crude_trans$gas_price ~ crude_trans$value, xlab = "Crude oil price", ylab = "Petrol retail price")
-# abline(lm(gas_price ~ value,data = crude_trans))
+abline(lm(gas_price ~ value,data = crude_trans))
 ```
 
 ### Linear regression
@@ -426,7 +437,7 @@ s$adj.r.squared
 s$coefficients[2,4]
 ```
 
-Based on the linear regression summary, I can see that the intercept of the model is `r s$coefficients[1]` and slope is `r s$coefficients[2]`. By looking at the P-value (`r s$coefficients[2,4]`) and the adjusted R-squared (`r s$adj.r.squared`) of the model, I can conclude that the correlation between the crude oil price and petrol retail price was not significant. Moreover, the model cannot be reliably used to predict retail price based on crude oil price.     
+Based on the linear regression summary, I can see that the intercept of the model is `r s$coefficients[1]` and slope is `r s$coefficients[2]`. By looking at the P-value (`r s$coefficients[2,4]` > 0.05) and the adjusted R-squared (`r s$adj.r.squared`) of the model, I can conclude that the correlation between the crude oil price and petrol retail price was not significant. Moreover, the model cannot be reliably used to predict retail price based on crude oil price.     
 
 
 As stated by the energy company [Z](https://z.co.nz/motorists/fuel-pricing/), its petrol retail price was determined by a few factors, such as the international barrel price, refined fuel prices in Asia and currency exchange rate. Additionally, according to [AA](https://www.aa.co.nz/cars/owning-a-car/fuel-prices-and-types/fuel-prices/), the two main reasons impacting petrol prices are world demand and supply, and investment speculation. Those two factors can be considered for future analysis if data is accessible.
@@ -434,15 +445,16 @@ As stated by the energy company [Z](https://z.co.nz/motorists/fuel-pricing/), it
 # Summary
 
 In this portfolio analysis, I have used [data](https://github.com/mickeyang/datasets/blob/main/portfolio.xlsx
-) collected from petrol refill receipts during the period from `r start_date` to `r end_date`. Those records were mainly generated in Palmerston North the Auckland where I lived and worked. I have also included two external datasets ([national petrol price](https://github.com/mickeyang/datasets/blob/main/national_petrol_price.xlsx
+) collected from my own petrol refill receipts during the period from `r start_date` to `r end_date`. Those records were mainly generated in Palmerston North the Auckland where I lived and worked. I have also included two external datasets ([national petrol price](https://github.com/mickeyang/datasets/blob/main/national_petrol_price.xlsx
 ) and [crude oil price](https://github.com/mickeyang/datasets/blob/main/crude_oil.csv
-)).    
+)).      
 
-During the analysis, I tried to understand my petrol consumption behaviour. I have found that Palmerston North had cheaper petrol price when comparing with the national average based on my observations. Moreover, my consumption behaviour was consistent in different cities. Based on my observations, I indeed had preferred weekday to go to petrol station, and there was no statistically significant evidence showing that big petrol promotions (greater than 6 cents) happened on a particular weekday.
+During the analysis, I tried to understand my petrol consumption behaviour. I have found that Palmerston North had cheaper petrol price when comparing with the national average based on my observations. Moreover, my consumption behaviour was consistent in different cities. Based on my observations, I indeed had preferred weekday to go to petrol station, and there was no statistically significant evidence showing that big petrol promotions (greater than 6 cents) happened on a particular weekday.        
 
-In the end, I carried out a linear regression analysis based on the New Zealand retail petrol price and the international crude oil. My finding was that there was no statistically significant correlation between those two prices. The petrol retail price change was not directly impacted by that of the crude oil.
+In the end, I carried out a linear regression analysis based on the New Zealand retail petrol price and the international crude oil. My finding was that there was no statistically significant correlation between those two prices. The petrol retail price change was not directly impacted by that of the international crude oil.    
 
+As time goes by, it will be interesting to see if the above analysis will be different or not when more petrol refilling data are collected.
 
 # END OF THE PORTFOLIO ANALYSIS
 
-Please kindly note that this PDF report was compiled in RMarkdown. The original RMD file can be found [here]().
+Please kindly note that this PDF report was compiled in RMarkdown. The original RMD file can be found [here](https://github.com/mickeyang/datasets/blob/main/PortfolioReport.Rmd).
